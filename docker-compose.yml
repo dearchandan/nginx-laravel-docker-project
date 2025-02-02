@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  app:
+    image: ubuntu:22.04
+    container_name: app
+    working_dir: /var/www/html
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./app:/var/www/html
+      - ./nginx/default.conf:/etc/nginx/sites-available/default
+    ports:
+      - "80:80"
+      - "443:443"
+      - "3306:3306"
+    environment:
+      DEBIAN_FRONTEND: noninteractive
+    command: bash -c "service php8.3-fpm start && nginx -g 'daemon off;'"
+    depends_on:
+      - php
+      - mysql
+
+  php:
+    image: php:8.3-fpm
+    container_name: php
+    volumes:
+      - ./app:/var/www/html
+
+  mysql:
+    image: mysql:5.7
+    container_name: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: [PASSWORD]
+      MYSQL_DATABASE: [DATABASE_NAME]
+      MYSQL_USER: [DATABASE_USER_NAME]
+      MYSQL_PASSWORD: [PASSWORD]
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:
+
+networks:
+  app_network:
