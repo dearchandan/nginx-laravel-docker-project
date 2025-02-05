@@ -13,14 +13,12 @@ ENV MYSQL_PASSWORD="*S4Kx*ZDamRn1Tmp"
 # Set Working Directory
 WORKDIR /var/www/html
 
-# Copy application files and configure Nginx
+# Copy application files
 COPY /app .
 
-# Install Nginx and PHP packages
+# Install Nginx, PHP, and SSL packages
 RUN apt update \
-    # Installing Nginx Server 
-    && apt install -y nginx \
-    # Installing PHP version and its dependencies
+    && apt install -y nginx certbot python3-certbot-nginx \
     && apt install software-properties-common -y \
     && add-apt-repository ppa:ondrej/php -y \
     && apt install -y \
@@ -41,9 +39,8 @@ RUN apt update \
     nano \
     && rm -rf /var/lib/apt/lists/*
 
-# Create directory for MySQL initialization scripts
+# MySQL setup (same as before)
 RUN mkdir -p /docker-entrypoint-initdb.d
-# Create MySQL initialization script
 RUN echo "#!/bin/bash\n\
 mysql -u root -p\${MYSQL_ROOT_PASSWORD} << EOF\n\
 CREATE DATABASE IF NOT EXISTS \${MYSQL_DATABASE};\n\
@@ -51,12 +48,10 @@ CREATE USER IF NOT EXISTS '\${MYSQL_USER}'@'localhost' IDENTIFIED BY '\${MYSQL_P
 GRANT ALL PRIVILEGES ON \${MYSQL_DATABASE}.* TO '\${MYSQL_USER}'@'localhost';\n\
 FLUSH PRIVILEGES;\n\
 EOF" > /docker-entrypoint-initdb.d/init-db.sh
-# Make the script executable
 RUN chmod +x /docker-entrypoint-initdb.d/init-db.sh
-# Configure MySQL
 RUN mkdir -p /var/run/mysqld \
-&& chown mysql:mysql /var/run/mysqld \
-&& echo "[mysqld]\nskip-host-cache\nskip-name-resolve\nbind-address=0.0.0.0" > /etc/mysql/conf.d/docker.cnf
+    && chown mysql:mysql /var/run/mysqld \
+    && echo "[mysqld]\nskip-host-cache\nskip-name-resolve\nbind-address=0.0.0.0" > /etc/mysql/conf.d/docker.cnf
 
 # Update Permissions
 RUN chown -R www-data:www-data /var/www/html \
@@ -64,12 +59,15 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 /var/www/html/public \
     && chmod -R 775 /var/www/html/bootstrap
 
-# Setting up nginx host file  
-COPY nginx/default.conf /etc/nginx/sites-available/default
+# Setting up nginx configuration
+COPY nginx/default-ssl.conf /etc/nginx/sites-available/default
 RUN rm -f /etc/nginx/sites-enabled/default \
     && ln -s /etc/nginx/sites-available/default /etc/nginx/sites-enabled/
 
-# Opening ports, 80 for Http, 443 for SSH, 3306 for MySQL
+# Create SSL certificate directory
+RUN mkdir -p /etc/letsencrypt/live/chandanlohar.in
+
+# Opening ports
 EXPOSE 80 443 3306
 
 # Create startup script
@@ -78,7 +76,5 @@ service mysql start\n\
 /docker-entrypoint-initdb.d/init-db.sh\n\
 service php\${PHP_VERSION}-fpm start\n\
 nginx -g 'daemon off;'" > /startup.sh
-# Make startup script executable
 RUN chmod +x /startup.sh
-# Start services
 CMD ["/startup.sh"]
